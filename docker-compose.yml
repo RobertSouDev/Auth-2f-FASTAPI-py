@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - auth-network
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://auth_user:auth_password@postgres:5432/auth_db
+      - SECRET_KEY=your-secret-key-here
+    depends_on:
+      - postgres
+    networks:
+      - auth-network
+
+volumes:
+  postgres_data:
+
+networks:
+  auth-network:
+    driver: bridge
+
