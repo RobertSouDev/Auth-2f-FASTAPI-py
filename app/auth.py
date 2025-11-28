@@ -10,13 +10,27 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+    """
+    Verifica se a senha em texto plano corresponde ao hash.
+    """
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception:
+        # Em caso de erro na verificação, retorna False
+        return False
 
 def get_password_hash(password):
-    return pwd_context.hash(password)
+    """
+    Gera o hash da senha usando Argon2.
+    Argon2 não possui limitação de tamanho de senha.
+    """
+    try:
+        return pwd_context.hash(password)
+    except Exception as e:
+        raise ValueError(f"Erro ao gerar hash da senha: {str(e)}")
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()

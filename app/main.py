@@ -1,11 +1,15 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from datetime import timedelta
 import uvicorn
+import logging
 
 from . import models, schemas, crud, auth
 from .database import get_db, engine
+
+logger = logging.getLogger(__name__)
 
 
 models.Base.metadata.create_all(bind=engine)
@@ -22,21 +26,54 @@ if __name__ == "__main__":
 
 @app.post("/register", response_model=schemas.UserResponse)
 def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    db_user = crud.get_user_by_username(db, username=user.username)
-    if db_user:
+    try:
+        # Verificar se o username já existe
+        db_user = crud.get_user_by_username(db, username=user.username)
+        if db_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already registered"
+            )
+        
+        # Verificar se o email já existe
+        db_user = crud.get_user_by_email(db, email=user.email)
+        if db_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+        
+        # Criar o usuário
+        new_user = crud.create_user(db=db, user=user)
+        return new_user
+    
+    except HTTPException:
+        # Re-raise HTTPExceptions (já tratadas)
+        raise
+    except ValueError as e:
+        # Erro de validação do CRUD (ex: usuário já existe)
+        db.rollback()
+        logger.error(f"Validation error during user registration: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already registered"
+            detail=str(e)
         )
-    
-    db_user = crud.get_user_by_email(db, email=user.email)
-    if db_user:
+    except IntegrityError as e:
+        # Erro de integridade do banco de dados (ex: constraint violation)
+        db.rollback()
+        logger.error(f"Integrity error during user registration: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            detail="User registration failed due to database constraint violation"
         )
-    
-    return crud.create_user(db=db, user=user)
+    except Exception as e:
+        # Qualquer outro erro inesperado
+        db.rollback()
+        logger.error(f"Unexpected error during user registration: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while registering the user"
+        )
 
 @app.post("/login", response_model=schemas.Token)
 def login(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
