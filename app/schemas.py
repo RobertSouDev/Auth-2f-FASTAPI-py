@@ -61,3 +61,21 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     username: Optional[str] = None
 
+class CodeRequest(BaseModel):
+    email: EmailStr
+
+class CodeValidation(BaseModel):
+    email: EmailStr
+    code: str = Field(..., min_length=4, max_length=4)
+
+class CodeResponse(BaseModel):
+    message: str
+
+class ValidationResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserResponse
+
+class ReenviarCodigoRequest(BaseModel):
+    email: EmailStr
+
